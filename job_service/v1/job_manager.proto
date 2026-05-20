@@ -1,0 +1,147 @@
+edition = "2024";
+
+package job_service.v1;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/partiallyordered/int-backend-matt-1/gen/job_service";
+
+// JobService provides methods for controlling a job worker service to run
+// arbitrary Linux processes on the server machine.
+service JobService {
+  // CreateJob creates a job on the server.
+  // We don't return a stream when creating a job because the API must include
+  // a means of streaming after the fact anyway, therefore it's left up to the
+  // client to manage the appearance of "instant-on" by making two requests.
+  rpc CreateJob(CreateJobRequest) returns (google.protobuf.Empty);
+  // StreamJobLog streams the job output. Stdout and stderr are multiplexed in
+  // a single stream, but delineated by output stream (stdout or stderr) on the
+  // returned object. If the job stops, the stream will be closed by the server.
+  rpc StreamJobLog(StreamJobLogRequest) returns (stream StreamJobLogResponse);
+  // SignalJob signals a job by sending it a client-specified signal. This
+  // allows the client to stop a job in the manner it pleases, for example by
+  // sending SIGINT, followed by SIGKILL after a timeout.
+  rpc SignalJob(SignalJobRequest) returns (google.protobuf.Empty);
+  // GetJobStatus returns the status of the job.
+  rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse);
+}
+
+// CreateJobRequest is sent by the client when creating a job. The client
+// should provide the job ID in order that if the request succeeds but the
+// connection is lost the client can check the job status before creating a
+// duplicate job.
+message CreateJobRequest {
+  // The job ID. This is client-created. The format is unspecified as clients
+  // are not considered to be malicious, and this allows a client to use an
+  // ergonomic ID such as "bob-finite-element-5" or "alice-build-run".
+  string job_id = 1;
+  // The executable to run as a job.
+  string executable = 2;
+  // The arguments that will be passed to the executable.
+  repeated string args = 3;
+}
+
+// StreamJobLogRequest is sent by the client to begin streaming the output of
+// the requested job.
+message StreamJobLogRequest {
+  // The job ID for which to stream the output.
+  string job_id = 1;
+}
+
+// StreamJobLogResponse is sent by the server in response to a
+// StreamJobLogRequest. Data is unmodified from the stdout or stderr output
+// stream. This API does not specify a buffering strategy. The stream from
+// which the data originates can be determined by examining the field
+// output_stream_name.
+message StreamJobLogResponse {
+  bytes output = 1;
+  OutputStream output_stream_name = 2;
+}
+
+// StopJobRequest is sent by the client to request a job be stopped. It is the
+// client's responsibility to handle timeouts and the manner of job termination.
+message SignalJobRequest {
+  // The ID of the job to cancel.
+  string job_id = 1;
+  // The signal to send to the process.
+  Signal signal = 2;
+}
+
+// GetJobStatusRequest is sent by the client to request the status of a job.
+message GetJobStatusRequest {
+  // The job ID for which to request the job status.
+  string job_id = 1;
+}
+
+// GetJobStatusResponse is sent by the server in response to a request for the
+// job status.
+message GetJobStatusResponse {
+  // Indicates whether or not the job is completed.
+  JobState job_state = 1;
+  // The exit code will only be set if the job is finished. A zero exit code in
+  // the case where the job is not finished is a default value, not successful
+  // completion of the job.
+  // 
+  // A Linux process exit code is strictly 8 bits, but there isn't a
+  // representation we can use in protobuf.
+  uint32 exit_code = 2;
+}
+
+// Signal represents the signal sent to a job when requested by the client,
+// typically in order to stop the job.
+enum Signal {
+  SIGNAL_UNSPECIFIED = 0;
+  // From Go's syscall library
+  SIGNAL_SIGABRT = 1;
+  SIGNAL_SIGALRM = 2;
+  SIGNAL_SIGBUS = 3;
+  SIGNAL_SIGCHLD = 4;
+  SIGNAL_SIGCLD = 5;
+  SIGNAL_SIGCONT = 6;
+  SIGNAL_SIGFPE = 7;
+  SIGNAL_SIGHUP = 8;
+  SIGNAL_SIGILL = 9;
+  SIGNAL_SIGINT = 10;
+  SIGNAL_SIGIO = 11;
+  SIGNAL_SIGIOT = 12;
+  SIGNAL_SIGKILL = 13;
+  SIGNAL_SIGPIPE = 14;
+  SIGNAL_SIGPOLL = 15;
+  SIGNAL_SIGPROF = 16;
+  SIGNAL_SIGPWR = 17;
+  SIGNAL_SIGQUIT = 18;
+  SIGNAL_SIGSEGV = 19;
+  SIGNAL_SIGSTKFLT = 20;
+  SIGNAL_SIGSTOP = 21;
+  SIGNAL_SIGSYS = 22;
+  SIGNAL_SIGTERM = 23;
+  SIGNAL_SIGTRAP = 24;
+  SIGNAL_SIGTSTP = 25;
+  SIGNAL_SIGTTIN = 26;
+  SIGNAL_SIGTTOU = 27;
+  SIGNAL_SIGUNUSED = 28;
+  SIGNAL_SIGURG = 29;
+  SIGNAL_SIGUSR1 = 30;
+  SIGNAL_SIGUSR2 = 31;
+  SIGNAL_SIGVTALRM = 32;
+  SIGNAL_SIGWINCH = 33;
+  SIGNAL_SIGXCPU = 34;
+  SIGNAL_SIGXFSZ = 35;
+}
+
+// OutputStream specifies whether output has been produced on the stderr or
+// stdout of the job.
+enum OutputStream {
+  OUTPUT_STREAM_UNSPECIFIED = 0;
+  // There is no relationship between stdout/stderr fds and these field
+  // numbers; the coincidence is just that.
+  OUTPUT_STREAM_STDOUT = 1;
+  OUTPUT_STREAM_STDERR = 2;
+}
+
+// JobState indicates whether the job is running or has stopped.
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  JOB_STATE_RUNNING = 1;
+  JOB_STATE_STOPPED = 2;
+}
