@@ -68,6 +68,8 @@ The worker library will expose an abstract representation of a job. Each job wil
 
 Internally, the worker will maintain two output buffers, each with a single writer, to which it will write stderr and stdout produced by the job. Each time a call is made to GetOutput, a new reader will be created for the requested buffer, stdout or stderr. This reader will block when it reaches the head of the buffer. To appropriately coordinate access to the shared data, a sync.RWMutex will be used. To avoid unnecessary resource usage Goroutines will be suspended and awoken using sync.Cond. Compared with naively writing to channels, this approach avoids only producing output as fast as the slowest reader.
 
+The planned library API can be see in the skeleton [./job/job.go](./job/job.go).
+
 ## Server
 
 The server will handle authentication and authorization. It will store a collection of jobs, which it will manage as requested by the client using the gRPC API specified in this repository.
