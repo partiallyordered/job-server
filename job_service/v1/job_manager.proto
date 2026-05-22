@@ -14,9 +14,10 @@ service JobService {
   // a means of streaming after the fact anyway, therefore it's left up to the
   // client to manage the appearance of "instant-on" by making two requests.
   rpc CreateJob(CreateJobRequest) returns (google.protobuf.Empty);
-  // StreamJobLog streams the job output. Stdout and stderr are multiplexed in
-  // a single stream, but delineated by output stream (stdout or stderr) on the
-  // returned object. If the job stops, the stream will be closed by the server.
+  // StreamJobLog streams the job output. Only one output job output stream
+  // (stdout or stderr) is streamed at a time. If the client requires, it can
+  // stream the two separately. If the job stops, the stream will be closed by
+  // the server.
   rpc StreamJobLog(StreamJobLogRequest) returns (stream StreamJobLogResponse);
   // SignalJob signals a job by sending it a client-specified signal. This
   // allows the client to stop a job in the manner it pleases, for example by
@@ -42,24 +43,25 @@ message CreateJobRequest {
 }
 
 // StreamJobLogRequest is sent by the client to begin streaming the output of
-// the requested job.
+// the requested job. The client may stream either stdout or stderr.
 message StreamJobLogRequest {
   // The job ID for which to stream the output.
   string job_id = 1;
+  // The requested output stream; stdout or stderr.
+  OutputStream output_stream_name = 2;
 }
 
 // StreamJobLogResponse is sent by the server in response to a
 // StreamJobLogRequest. Data is unmodified from the stdout or stderr output
-// stream. This API does not specify a buffering strategy. The stream from
-// which the data originates can be determined by examining the field
-// output_stream_name.
+// stream. This API does not specify a buffering strategy.
 message StreamJobLogResponse {
   bytes output = 1;
-  OutputStream output_stream_name = 2;
 }
 
 // StopJobRequest is sent by the client to request a job be stopped. It is the
 // client's responsibility to handle timeouts and the manner of job termination.
+// For example, the client may wish to send a SIGTERM with a five second timeout
+// before sending a SIGKILL.
 message SignalJobRequest {
   // The ID of the job to cancel.
   string job_id = 1;
@@ -78,13 +80,19 @@ message GetJobStatusRequest {
 message GetJobStatusResponse {
   // Indicates whether or not the job is completed.
   JobState job_state = 1;
+  // Flags indicating whether the job has produced output on stdout and/or
+  // stderr. These make it easier for the client to know which buffers could be
+  // interesting to consume, and can help surface an error or warning produced
+  // by the job.
+  bool stdout_written = 2;
+  bool stderr_written = 3;
   // The exit code will only be set if the job is finished. A zero exit code in
   // the case where the job is not finished is a default value, not successful
   // completion of the job.
   // 
-  // A Linux process exit code is strictly 8 bits, but there isn't a
-  // representation we can use in protobuf.
-  uint32 exit_code = 2;
+  // A Linux process exit code is strictly 8 bits, but there isn't a uint8
+  // in protobuf.
+  uint32 exit_code = 4;
 }
 
 // Signal represents the signal sent to a job when requested by the client,

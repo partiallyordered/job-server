@@ -50,6 +50,12 @@ Assumptions are made primarily to constrain scope and reduce the duration and co
 
 10. Derived from requirement _output should be from the start of process execution_, clients will stream the log from the beginning at each invocation.
 
+11. The _user_ (i.e. the caller of the CLI) will be responsible for interleaving stderr and stdout. This assumption has the following implications:
+    - The implementation is simplified, with all the advantages of that (testability, reliability, maintainability, implementation time, etc.)
+    - stderr and stdout are vanishingly unlikely to be produced on e.g. a terminal or in a log in the same chronological order they were produced by the job. Although to ensure this would considerably increase the implementation complexity, and there's not even a guarantee the job itself deterministically produces output on the two streams. However, this is likely to also mean that correlating events on stdout and warnings or errors on stderr becomes more difficult.
+    - The user will more easily be able to distinguish between stderr and stdout streams. This means that if stdout produces a lot of data, and the job writes an error or warning to stderr, this can be more visible.
+    - The user will not necessarily see that an error occurred, and is even less likely to see warnings. Some facility to surface these will be provided in the implementation.
+
 # Design Approach
 
 ## API
@@ -60,7 +66,7 @@ The _design approach_ section begins with the API, by encouraging the reader to 
 
 The worker library will expose an abstract representation of a job. Each job will store its state internally, specifically the running process represented by the job, and all process output. Under the aforementioned assumption of unlimited memory, no effort is made to constrain memory consumption of job output.
 
-Internally, the worker will maintain two output buffers, each with a single writer, to which it will write stderr and stdout produced by the job. When a call is made to GetOutput, goroutines will be created to mux the stderr and stdout from the job onto a single channel to be consumed by the reader. To appropriately coordinate access to the shared data, a sync.RWMutex will be used. To avoid unnecessary resource usage Goroutines will be suspended and awoken using sync.Cond. Compared with naively writing to channels, this approach avoids only producing output as fast as the slowest reader.
+Internally, the worker will maintain two output buffers, each with a single writer, to which it will write stderr and stdout produced by the job. Each time a call is made to GetOutput, a new reader will be created for the requested buffer, stdout or stderr. This reader will block when it reaches the head of the buffer. To appropriately coordinate access to the shared data, a sync.RWMutex will be used. To avoid unnecessary resource usage Goroutines will be suspended and awoken using sync.Cond. Compared with naively writing to channels, this approach avoids only producing output as fast as the slowest reader.
 
 ## Server
 
@@ -76,7 +82,7 @@ The allowlist will be hard-coded to demonstrate functionality and save time on i
 
 ## CLI
 
-The CLI will have a subcommand-style API for readability. For simplicity of implementation, it will expect to find its private key and client certificate in its working directory, with hardcoded filenames. This information will be available in the help text (`job help`) and in error messages.
+The CLI will have a subcommand-style API for readability and ergonomics. For simplicity of implementation, it will expect to find its private key and client certificate in its working directory, with hardcoded filenames. This information will be available in the help text (`job help`) and in error messages.
 
 Create a job with `job start <id> <executable> <...args>`:
 
@@ -100,10 +106,15 @@ job stop --signal=SIGKILL enthusiastic-agreement
 job stop --timeout=5s enthusiastic-agreement
 ```
 
-Stream the output of a job with `job stream <job-id>`:
+Stream the output of a job with `job stream [--output] <job-id>`:
 
-```sh
+```bash
+# The default output stream is stdout.
 job stream enthusiastic-agreement
+# But we can stream stderr if we like. This will be produced on the stdout of `job`.
+job stream --output=stderr enthusiastic-agreement
+# Multiplex stdout and stderr using shell functionality, e.g. a simple (slightly awkward) example in bash:
+job stream enthusiastic-agreement & job stream --output=stderr enthusiastic-agreement
 ```
 
 It's important to note that stdout and stderr may not be reproduced in the same order as by the job, though they will nonetheless be produced on the CLI stdout and stderr.
