@@ -19,25 +19,30 @@ type Job struct{}
 type OutputStream int
 
 const (
+	// Stdout represents the standard output stream stdout
 	Stdout OutputStream = iota
+	// Stderr represents the standard output stream stderr
 	Stderr
 )
 
-// JobStatusCode represents a job's running/stopped state.
-type JobStatusCode int
+// StatusCode represents a job's running/stopped state.
+type StatusCode int
 
 const (
-	Running JobStatusCode = iota
+	// Running indicates a job that has been created/started and not yet stopped
+	Running StatusCode = iota
+	// Stopped indicates a job that has been created/started and has completed normally or been
+	// stopped by a signal.
 	Stopped
 )
 
-// JobStatus provides a status code to indicate whether the job is stopped or running, and a flag
-// to indicate whether the job has written data to stdout and/or stderr. These flags make it
-// easier for the consumer to see which buffers might be interesting to read. They especially help
-// to surface the case where a job has written a warning or error to stderr before exiting, or
-// after exiting normally.
-type JobStatus struct {
-	Code          JobStatusCode
+// Status provides a status code to indicate whether the job is stopped or running, and a flag to
+// indicate whether the job has written data to stdout and/or stderr. These flags make it easier
+// for the consumer to see which buffers might be interesting to read. They especially help to
+// surface the case where a job has written a warning or error to stderr before exiting, or after
+// exiting normally.
+type Status struct {
+	Code          StatusCode
 	StdoutWritten bool
 	StderrWritten bool
 	LinuxExitCode uint8
@@ -64,6 +69,6 @@ func (job *Job) Signal(signal int) error {
 }
 
 // Status returns the current running status of the job: [Running] or [Stopped].
-func (job *Job) Status() JobStatus {
-	return JobStatus{}
+func (job *Job) Status() Status {
+	return Status{}
 }
