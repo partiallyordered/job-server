@@ -7,7 +7,6 @@ package job
 
 import (
 	"context"
-	"io"
 )
 
 // Job represents a subprocess running on the host system. To create a job, use the helper function
@@ -43,7 +42,7 @@ func CreateJob(ctx context.Context, executable string, arg ...string) (*Job, err
 
 // NewOutputReader returns a reader to which is produced all job output since the creation of the
 // job. The reader will continue to stream until the job finishes or is stopped.
-func (job *Job) NewOutputReader() (io.Reader, error) {
+func (job *Job) NewOutputReader(ctx context.Context) (*cursor, error) {
 	return nil, nil
 }
 
