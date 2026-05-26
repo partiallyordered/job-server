@@ -47,8 +47,6 @@ message CreateJobRequest {
 message StreamJobLogRequest {
   // The job ID for which to stream the output.
   string job_id = 1;
-  // The requested output stream; stdout or stderr.
-  OutputStream output_stream_name = 2;
 }
 
 // StreamJobLogResponse is sent by the server in response to a
@@ -58,15 +56,10 @@ message StreamJobLogResponse {
   bytes output = 1;
 }
 
-// StopJobRequest is sent by the client to request a job be stopped. It is the
-// client's responsibility to handle timeouts and the manner of job termination.
-// For example, the client may wish to send a SIGTERM with a five second timeout
-// before sending a SIGKILL.
-message SignalJobRequest {
+// StopJobRequest is sent by the client to request a job be stopped.
+message StopJobRequest {
   // The ID of the job to cancel.
   string job_id = 1;
-  // The signal to send to the process.
-  Signal signal = 2;
 }
 
 // GetJobStatusRequest is sent by the client to request the status of a job.
@@ -80,68 +73,10 @@ message GetJobStatusRequest {
 message GetJobStatusResponse {
   // Indicates whether or not the job is completed.
   JobState job_state = 1;
-  // Flags indicating whether the job has produced output on stdout and/or
-  // stderr. These make it easier for the client to know which buffers could be
-  // interesting to consume, and can help surface an error or warning produced
-  // by the job.
-  bool stdout_written = 2;
-  bool stderr_written = 3;
   // The exit code will only be set if the job is finished. A zero exit code in
   // the case where the job is not finished is a default value, not successful
   // completion of the job.
   sint32 exit_code = 4;
-}
-
-// Signal represents the signal sent to a job when requested by the client,
-// typically in order to stop the job.
-enum Signal {
-  SIGNAL_UNSPECIFIED = 0;
-  // From Go's syscall library
-  SIGNAL_SIGABRT = 1;
-  SIGNAL_SIGALRM = 2;
-  SIGNAL_SIGBUS = 3;
-  SIGNAL_SIGCHLD = 4;
-  SIGNAL_SIGCLD = 5;
-  SIGNAL_SIGCONT = 6;
-  SIGNAL_SIGFPE = 7;
-  SIGNAL_SIGHUP = 8;
-  SIGNAL_SIGILL = 9;
-  SIGNAL_SIGINT = 10;
-  SIGNAL_SIGIO = 11;
-  SIGNAL_SIGIOT = 12;
-  SIGNAL_SIGKILL = 13;
-  SIGNAL_SIGPIPE = 14;
-  SIGNAL_SIGPOLL = 15;
-  SIGNAL_SIGPROF = 16;
-  SIGNAL_SIGPWR = 17;
-  SIGNAL_SIGQUIT = 18;
-  SIGNAL_SIGSEGV = 19;
-  SIGNAL_SIGSTKFLT = 20;
-  SIGNAL_SIGSTOP = 21;
-  SIGNAL_SIGSYS = 22;
-  SIGNAL_SIGTERM = 23;
-  SIGNAL_SIGTRAP = 24;
-  SIGNAL_SIGTSTP = 25;
-  SIGNAL_SIGTTIN = 26;
-  SIGNAL_SIGTTOU = 27;
-  SIGNAL_SIGUNUSED = 28;
-  SIGNAL_SIGURG = 29;
-  SIGNAL_SIGUSR1 = 30;
-  SIGNAL_SIGUSR2 = 31;
-  SIGNAL_SIGVTALRM = 32;
-  SIGNAL_SIGWINCH = 33;
-  SIGNAL_SIGXCPU = 34;
-  SIGNAL_SIGXFSZ = 35;
-}
-
-// OutputStream specifies whether output has been produced on the stderr or
-// stdout of the job.
-enum OutputStream {
-  OUTPUT_STREAM_UNSPECIFIED = 0;
-  // There is no relationship between stdout/stderr fds and these field
-  // numbers; the coincidence is just that.
-  OUTPUT_STREAM_STDOUT = 1;
-  OUTPUT_STREAM_STDERR = 2;
 }
 
 // JobState indicates whether the job is running or has stopped.
