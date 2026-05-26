@@ -60,13 +60,27 @@ The _design approach_ section begins with the API, by encouraging the reader to 
 
 The worker library will expose an abstract representation of a job. Each job will store its state internally, specifically the running process represented by the job, and all process output. Under the aforementioned assumption of unlimited memory, no effort is made to constrain memory consumption of job output.
 
-Internally, the worker will maintain two output buffers, each with a single writer, to which it will write stderr and stdout produced by the job. Each time a call is made to GetOutput, a new reader will be created for the requested buffer, stdout or stderr. This reader will block when it reaches the head of the buffer. To appropriately coordinate access to the shared data, a sync.RWMutex will be used. To avoid unnecessary resource usage Goroutines will be suspended and awoken using sync.Cond. Compared with naively writing to channels, this approach avoids only producing output as fast as the slowest reader.
+### Handling Process Output
+
+The worker will have an implementation of a buffer that supports multiple readers and multiple writers. As a consequence of using [sync.RWMutex](https://pkg.go.dev/sync#RWMutex) internally, buffer will at any one time support either _a single writer_ **or** _multiple concurrent readers_.
+
+Readers will block when they have reached the write head, i.e. there is no more data to read, and the buffer is not closed. They will wait efficiently by waiting on a signal channel which will be closed when data is written to the buffer, indicating they should wake up and attempt to acquire the read lock.
+
+When the buffer is written, the writer will acquire the write lock, excluding all other threads. The payload will be written and a signal channel will be closed to indicate that readers should wake up for new data. The signal channel will be replaced so the readers can "resubscribe" and the write lock will be released.
+
+When the buffer is closed, an internal flag will be set. When readers reach the end of the buffer and the buffer is closed, EOF will be returned.
+
+See the skeleton of `broadcastBuffer` at [./job/broadcast_buffer.go](./job/broadcast_buffer.go).
+
+### Managing Processes
+
+Processes will be created using [exec.CommandContext](https://pkg.go.dev/os/exec#CommandContext). A single `broadcastBuffer` will be assigned to both `cmd.Stderr` and `cmd.Stdout`, interleaving the process output streams to the buffer. When a job is created, the process will be created and started. A goroutine will be spawned and block on `cmd.Wait`. When the process exits normally or is terminated, this goroutine will resume and close the `broadcastBuffer`. Any readers will continue to read until the end of the buffer, then receive io.EOF, allowing them to release resources. Concurrent calls to `Job.Stop` and `Job.Status`, and changes to their data `job.status` and `job.exitCode` will be protected by mutex.
 
 The planned library API can be see in the skeleton [./job/job.go](./job/job.go).
 
 ## Server
 
-The server will handle authentication and authorization. It will store a collection of jobs, which it will manage as requested by the client using the gRPC API specified in this repository.
+The server will handle authentication and authorization. It will store a `map[string]Job` in order to map requests to jobs. It will manage this collection as requested by the client using the gRPC API specified in this repository. When a request to stream is received, the server will request a new output reader from the job, to which it will supply a context to signal client disconnection, allowing resources to be released when clients disappear.
 
 Authorization will be managed by:
 
