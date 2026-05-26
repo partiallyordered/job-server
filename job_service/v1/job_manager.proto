@@ -2,8 +2,6 @@ edition = "2024";
 
 package job_service.v1;
 
-import "google/protobuf/empty.proto";
-
 option go_package = "github.com/partiallyordered/int-backend-matt-1/gen/job_service";
 
 // JobService provides methods for controlling a job worker service to run
@@ -13,19 +11,26 @@ service JobService {
   // We don't return a stream when creating a job because the API must include
   // a means of streaming after the fact anyway, therefore it's left up to the
   // client to manage the appearance of "instant-on" by making two requests.
-  rpc CreateJob(CreateJobRequest) returns (google.protobuf.Empty);
+  rpc CreateJob(CreateJobRequest) returns (CreateJobResponse);
   // StreamJobLog streams the job output. Only one output job output stream
   // (stdout or stderr) is streamed at a time. If the client requires, it can
   // stream the two separately. If the job stops, the stream will be closed by
   // the server.
   rpc StreamJobLog(StreamJobLogRequest) returns (stream StreamJobLogResponse);
-  // SignalJob signals a job by sending it a client-specified signal. This
-  // allows the client to stop a job in the manner it pleases, for example by
-  // sending SIGINT, followed by SIGKILL after a timeout.
-  rpc SignalJob(SignalJobRequest) returns (google.protobuf.Empty);
+  // StopJob terminates a job forcefully and closes any output streams that have
+  // reached the write head.
+  rpc StopJob(StopJobRequest) returns (StopJobResponse);
   // GetJobStatus returns the status of the job.
   rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse);
 }
+
+// CreateJobResponse is returned by CreateJob. It is currently empty but exists
+// to support backward compatibility. 
+message CreateJobResponse {}
+
+// StopJobResponse is returned by StopJob. It is currently empty but exists to
+// support backward compatibility. 
+message StopJobResponse {}
 
 // CreateJobRequest is sent by the client when creating a job. The client
 // should provide the job ID in order that if the request succeeds but the
