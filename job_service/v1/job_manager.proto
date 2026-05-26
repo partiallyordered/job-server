@@ -89,10 +89,7 @@ message GetJobStatusResponse {
   // The exit code will only be set if the job is finished. A zero exit code in
   // the case where the job is not finished is a default value, not successful
   // completion of the job.
-  // 
-  // A Linux process exit code is strictly 8 bits, but there isn't a uint8
-  // in protobuf.
-  uint32 exit_code = 4;
+  sint32 exit_code = 4;
 }
 
 // Signal represents the signal sent to a job when requested by the client,

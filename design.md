@@ -50,12 +50,6 @@ Assumptions are made primarily to constrain scope and reduce the duration and co
 
 10. Derived from requirement _output should be from the start of process execution_, clients will stream the log from the beginning at each invocation.
 
-11. The _user_ (i.e. the caller of the CLI) will be responsible for interleaving stderr and stdout. This assumption has the following implications:
-    - The implementation is simplified, with all the advantages of that (testability, reliability, maintainability, implementation time, etc.)
-    - stderr and stdout are vanishingly unlikely to be produced on e.g. a terminal or in a log in the same chronological order they were produced by the job. Although to ensure this would considerably increase the implementation complexity, and there's not even a guarantee the job itself deterministically produces output on the two streams. However, this is likely to also mean that correlating events on stdout and warnings or errors on stderr becomes more difficult.
-    - The user will more easily be able to distinguish between stderr and stdout streams. This means that if stdout produces a lot of data, and the job writes an error or warning to stderr, this can be more visible.
-    - The user will not necessarily see that an error occurred, and is even less likely to see warnings. Some facility to surface these will be provided in the implementation.
-
 # Design Approach
 
 ## API
@@ -98,28 +92,18 @@ Get the job status
 job status enthusiastic-agreement
 ```
 
-Stop a job with `job stop <id>`. This will send a SIGTERM to the process to allow it to exit gracefully.
+Stop a job with `job stop <id>`. This will send a SIGKILL to the process.
 
 ```sh
 job stop enthusiastic-agreement
-# Or immediately. Other signals are available, meaning the user can e.g. pause and resume jobs.
-job stop --signal=SIGKILL enthusiastic-agreement
-# Gracefully, but with a timeout, after which the process will be sent a SIGKILL.
-job stop --timeout=5s enthusiastic-agreement
 ```
 
-Stream the output of a job with `job stream [--output] <job-id>`:
+Stream the output of a job with `job stream <job-id>`:
 
 ```bash
 # The default output stream is stdout.
 job stream enthusiastic-agreement
-# But we can stream stderr if we like. This will be produced on the stdout of `job`.
-job stream --output=stderr enthusiastic-agreement
-# Multiplex stdout and stderr using shell functionality, e.g. a simple (slightly awkward) example in bash:
-job stream enthusiastic-agreement & job stream --output=stderr enthusiastic-agreement
 ```
-
-It's important to note that stdout and stderr may not be reproduced in the same order as by the job, though they will nonetheless be produced on the CLI stdout and stderr.
 
 # Security Considerations
 
