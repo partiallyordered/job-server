@@ -20,9 +20,12 @@ type StatusCode int
 const (
 	// Running indicates a job that has been created/started and not yet stopped
 	Running StatusCode = iota
-	// Stopped indicates a job that has been created/started and has completed normally or been
+	// UserStopped indicates a job that has been created/started and has completed normally or been
 	// stopped by a signal.
-	Stopped
+	UserStopped
+	// ExternallyStopped indicates that the job was stopped by a signal issued external to the job
+	// manager, for example the OOMKiller.
+	ExternallyStopped
 )
 
 // Status provides a status code to indicate whether the job is stopped or running. The exit code
@@ -52,7 +55,7 @@ func (job *Job) Stop() error {
 	return nil
 }
 
-// Status returns the current running status of the job: [Running] or [Stopped].
+// Status returns the current status of the job.
 func (job *Job) Status() Status {
 	return Status{}
 }
