@@ -20,9 +20,10 @@ type StatusCode int
 const (
 	// Running indicates a job that has been created/started and not yet stopped
 	Running StatusCode = iota
-	// UserStopped indicates a job that has been created/started and has completed normally or been
-	// stopped by a signal.
-	UserStopped
+	// StoppedNormally indicates a job that has been created/started and has completed normally or been
+	// stopped by a user signal. Check [Status.ExitCode] to determine whether the job completed
+	// normally or was stopped by the user (exit code -1).
+	StoppedNormally
 	// ExternallyStopped indicates that the job was stopped by a signal issued external to the job
 	// manager, for example the OOMKiller.
 	ExternallyStopped
@@ -32,8 +33,8 @@ const (
 // will not be set when the job has not finished. An exit code of -1 indicates the job was
 // terminated forcefully, by [Stop].
 type Status struct {
-	Code          StatusCode
-	LinuxExitCode int
+	Code     StatusCode
+	ExitCode int
 }
 
 // CreateJob is a helper function to create a [Job]. Internally, a job is a system process. A

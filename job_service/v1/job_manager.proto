@@ -87,7 +87,13 @@ message GetJobStatusResponse {
 // JobState indicates whether the job is running or has stopped.
 enum JobState {
   JOB_STATE_UNSPECIFIED = 0;
+	// Indicates a job that has been created/started and not yet stopped
   JOB_STATE_RUNNING = 1;
-  JOB_STATE_USER_STOPPED = 2;
+	// Indicates a job that has been created/started and has completed normally or
+	// been stopped by a user signal. Check exit code to determine whether the job
+	// completed normally or was stopped by the user (exit code -1).
+  JOB_STATE_STOPPED_NORMALLY = 2;
+	// ExternallyStopped indicates that the job was stopped by a signal issued
+	// external to the job manager, for example the OOMKiller.
   JOB_STATE_EXTERNALLY_STOPPED = 3;
 }
