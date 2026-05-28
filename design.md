@@ -94,10 +94,11 @@ The allowlist will be hard-coded to demonstrate functionality and save time on i
 
 The CLI will have a subcommand-style API for readability and ergonomics. For simplicity of implementation, it will expect to find its private key and client certificate in its working directory, with hardcoded filenames. This information will be available in the help text (`job help`) and in error messages.
 
-Create a job with `job start <id> <executable> <...args>`:
+Create a job with `job start <id> -- <executable> <...args>`:
 
 ```sh
-job start enthusiastic-agreement yes "yes!"
+# The -- denotes the end of arguments to `job` and the beginning of the command to be run as a job
+job start enthusiastic-agreement -- yes "yes!"
 ```
 
 Get the job status
