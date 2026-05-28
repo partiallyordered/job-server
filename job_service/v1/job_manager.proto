@@ -82,6 +82,9 @@ message GetJobStatusResponse {
   // the case where the job is not finished is a default value, not successful
   // completion of the job.
   sint32 exit_code = 2;
+  // Indicates whether an out-of-process error has occurred, for example an I/O
+  // error communicating with the process.
+  string job_err = 3;
 }
 
 // JobState indicates whether the job is running or has stopped.
