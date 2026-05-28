@@ -37,14 +37,15 @@ func newBroadcastBuffer() *broadcastBuffer {
 
 // close closes the buffer and prevents further writes. Any existing readers will be able to
 // continue reading the rest of the buffer. Any new readers will be able to read the entire buffer.
-// Calling [close] on a closed buffer will panic. A cursor at the end of a closed broadcastBuffer will
-// return io.EOF on read.
+// A cursor at the end of a closed broadcastBuffer will return io.EOF on read.
 func (bb *broadcastBuffer) close() {
 	bb.mu.Lock()
 	defer bb.mu.Unlock()
-	bb.closed = true
-	// Close the signal channel to unblock readers at the write head and allow them to return EOF
-	close(bb.signalCh)
+	if !bb.closed {
+		bb.closed = true
+		// Close the signal channel to unblock readers at the write head and allow them to return EOF
+		close(bb.signalCh)
+	}
 	// Considered implementing the Closer interface, but decided against it as this is a non-exported
 	// type and there's no internal need to return an error.
 }
