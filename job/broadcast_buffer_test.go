@@ -73,6 +73,13 @@ func TestMultipleWrite(t *testing.T) {
 	assert.Equal(t, expected, bb.data)
 }
 
+func TestWriteClosedBuffer(t *testing.T) {
+	bb := newBroadcastBuffer()
+	bb.close()
+	_, err := bb.Write([]byte{})
+	assert.ErrorIs(t, err, ErrWriteToClosedBroadcastBuffer)
+}
+
 func TestReadEmptyAndClose(t *testing.T) {
 	bb := newBroadcastBuffer()
 	reader := bb.newReader(t.Context())

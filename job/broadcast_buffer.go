@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 )
@@ -26,6 +27,9 @@ type cursor struct {
 	buf *broadcastBuffer
 	off int
 }
+
+// ErrWriteToClosedBroadcastBuffer occurs when [Write] is called on a closed broadcastBuffer.
+var ErrWriteToClosedBroadcastBuffer = errors.New("write to closed broadcastBuffer")
 
 // newBroadcastBuffer is a convenience function for constructing a broadcastBuffer.
 func newBroadcastBuffer() *broadcastBuffer {
@@ -64,7 +68,7 @@ func (bb *broadcastBuffer) Write(p []byte) (int, error) {
 	bb.mu.Lock()
 	defer bb.mu.Unlock()
 	if bb.closed {
-		panic("write to closed broadcastBuffer")
+		return 0, ErrWriteToClosedBroadcastBuffer
 	}
 	bb.data = append(bb.data, p...)
 	oldSigCh := bb.signalCh
