@@ -72,6 +72,12 @@ When the buffer is closed, an internal flag will be set. When readers reach the 
 
 See the skeleton of `broadcastBuffer` at [./job/broadcast_buffer.go](./job/broadcast_buffer.go).
 
+#### An Alternative
+
+Passing slices around via channels could work. The simplest implementation (a loop over reader channels) has the drawback that a slow reader blocks other readers. More complex implementations require spawning goroutines to handle different readers. This carries a risk of leaking goroutines but is not overly burdensome.
+
+I estimate that the complexity of this implementation and that is roughly equivalent. There are two advantages of the approach proposed above: error handling is easier, and we can implement the io.Reader interface, which is practical for integration elsewhere.
+
 ### Managing Processes
 
 Processes will be created using [exec.CommandContext](https://pkg.go.dev/os/exec#CommandContext). A single `broadcastBuffer` will be assigned to both `cmd.Stderr` and `cmd.Stdout`, interleaving the process output streams to the buffer. When a job is created, the process will be created and started. A goroutine will be spawned and block on `cmd.Wait`. When the process exits normally or is terminated, this goroutine will resume and close the `broadcastBuffer`. Any readers will continue to read until the end of the buffer, then receive io.EOF, allowing them to release resources. Concurrent calls to `Job.Stop` and `Job.Status`, and changes to their data `job.status` and `job.exitCode` will be protected by mutex.
