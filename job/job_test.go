@@ -14,7 +14,7 @@ import (
 func TestEchoHello(t *testing.T) {
 	greeting := "hello"
 	expected := []byte(greeting)
-	job, err := CreateJob("echo", "-n", greeting)
+	job, err := Create("echo", "-n", greeting)
 	require.NoError(t, err)
 	require.Equal(t, Running, job.Status().Code)
 	r := job.NewOutputReader(t.Context())
@@ -27,7 +27,7 @@ func TestEchoHello(t *testing.T) {
 
 func TestNonZeroExitCode(t *testing.T) {
 	code := 42
-	job, err := CreateJob("bash", "-c", fmt.Sprintf("exit %d", code))
+	job, err := Create("bash", "-c", fmt.Sprintf("exit %d", code))
 	require.NoError(t, err)
 	require.Equal(t, Running, job.Status().Code)
 	_, err = io.ReadAll(job.NewOutputReader(t.Context())) // blocks until after job completion
@@ -39,7 +39,7 @@ func TestNonZeroExitCode(t *testing.T) {
 func TestStderrOutput(t *testing.T) {
 	greeting := "hello"
 	expected := []byte(greeting)
-	job, err := CreateJob("bash", "-c", "echo -n "+greeting+" >&2")
+	job, err := Create("bash", "-c", "echo -n "+greeting+" >&2")
 	require.NoError(t, err)
 	require.Equal(t, Running, job.Status().Code)
 	r := job.NewOutputReader(t.Context())
@@ -53,7 +53,7 @@ func TestStderrOutput(t *testing.T) {
 func TestStderrAndStdoutOutput(t *testing.T) {
 	greeting := "hello"
 	expected := append([]byte(greeting), greeting...)
-	job, err := CreateJob("bash", "-c", "echo -n "+greeting+" | tee /dev/stderr")
+	job, err := Create("bash", "-c", "echo -n "+greeting+" | tee /dev/stderr")
 	require.NoError(t, err)
 	reader := job.NewOutputReader(t.Context())
 	output, err := io.ReadAll(reader)
@@ -64,7 +64,7 @@ func TestStderrAndStdoutOutput(t *testing.T) {
 }
 
 func TestForcedTermination(t *testing.T) {
-	job, err := CreateJob("sleep", "infinity")
+	job, err := Create("sleep", "infinity")
 	require.NoError(t, err)
 	require.NoError(t, job.Stop())
 	_, err = io.ReadAll(job.NewOutputReader(t.Context())) // blocks until after job completion

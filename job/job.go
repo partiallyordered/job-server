@@ -15,7 +15,7 @@ import (
 )
 
 // Job represents a subprocess running on the host system. To create a job, use the helper function
-// [CreateJob]. Job status can be retrieved with [Status]. [NewOutputReader] returns a reader that
+// [Create]. Job status can be retrieved with [Status]. [NewOutputReader] returns a reader that
 // will stream stdout and stderr from the job until it completes. A job can be stopped with [Stop].
 type Job struct {
 	cmd           *exec.Cmd
@@ -60,10 +60,10 @@ type Status struct {
 // ErrAttemptToStopStoppedJob occurs when the user calls [Stop] on a stopped job
 var ErrAttemptToStopStoppedJob = errors.New("attempt to stop stopped job")
 
-// CreateJob is a helper function to create a [Job]. Internally, a job is a system process. A
+// Create is a helper function to create a [Job]. Internally, a job is a system process. A
 // created job is started immediately. The job (and process) can be stopped by calling the [Stop]
 // method.
-func CreateJob(executable string, arg ...string) (*Job, error) {
+func Create(executable string, arg ...string) (*Job, error) {
 	output := newBroadcastBuffer()
 	cmd := exec.Command(executable, arg...)
 
