@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"errors"
 	"io"
 	"sync"
@@ -23,13 +22,17 @@ type broadcastBuffer struct {
 // broadcastBuffer sequentially until it has read all the data in the buffer and the buffer is
 // closed, at which point the [Read] method will return io.EOF.
 type cursor struct {
-	ctx context.Context
-	buf *broadcastBuffer
-	off int
+	close  sync.Once
+	closed chan struct{}
+	buf    *broadcastBuffer
+	off    int
 }
 
 // ErrWriteToClosedBroadcastBuffer occurs when [Write] is called on a closed broadcastBuffer.
 var ErrWriteToClosedBroadcastBuffer = errors.New("write to closed broadcastBuffer")
+
+// ErrCursorClosed is returned by [cursor.Read] when the cursor is closed.
+var ErrCursorClosed = errors.New("reader closed")
 
 // newBroadcastBuffer is a convenience function for constructing a broadcastBuffer.
 func newBroadcastBuffer() *broadcastBuffer {
@@ -56,10 +59,10 @@ func (bb *broadcastBuffer) close() {
 
 // newReader returns a reader which will sequentially read the data contained by broadcastBuffer
 // until it has read the entire buffer and broadcastBuffer is closed.
-func (bb *broadcastBuffer) newReader(ctx context.Context) io.Reader {
+func (bb *broadcastBuffer) newReader() io.ReadCloser {
 	return &cursor{
-		buf: bb,
-		ctx: ctx,
+		buf:    bb,
+		closed: make(chan struct{}),
 	}
 }
 
@@ -119,9 +122,17 @@ func (c *cursor) Read(p []byte) (int, error) {
 		// 1. the writer to signal that we should wake up, and
 		// 2. our close signal
 		select {
-		case <-c.ctx.Done():
-			return 0, c.ctx.Err()
+		case <-c.closed:
+			return 0, ErrCursorClosed
 		case <-wait:
 		}
 	}
+}
+
+// Close implements the closer interface.
+func (c *cursor) Close() error {
+	c.close.Do(func() {
+		close(c.closed)
+	})
+	return nil
 }

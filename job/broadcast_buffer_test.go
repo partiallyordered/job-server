@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"errors"
 	"io"
 	"math/rand/v2"
@@ -82,7 +81,7 @@ func TestWriteClosedBuffer(t *testing.T) {
 
 func TestReadEmptyAndClose(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader := bb.newReader(t.Context())
+	reader := bb.newReader()
 
 	expected := make([]byte, 0)
 	actual := make([]byte, 0)
@@ -104,7 +103,7 @@ func TestReadEmptyAndClose(t *testing.T) {
 
 func TestReadBeforeWriteAndClose(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader := bb.newReader(t.Context())
+	reader := bb.newReader()
 
 	expected := []byte("some small amount of data that should be recovered correctly")
 	actual := make([]byte, 0)
@@ -128,7 +127,7 @@ func TestReadBeforeWriteAndClose(t *testing.T) {
 
 func TestWriteBeforeReadAndClose(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader := bb.newReader(t.Context())
+	reader := bb.newReader()
 
 	expected := []byte("some small amount of data that should be recovered correctly")
 	var actual []byte
@@ -152,7 +151,7 @@ func TestWriteBeforeReadAndClose(t *testing.T) {
 
 func TestWriteAndCloseBeforeRead(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader := bb.newReader(t.Context())
+	reader := bb.newReader()
 
 	expected := []byte("some small amount of data that should be recovered correctly")
 
@@ -168,8 +167,8 @@ func TestWriteAndCloseBeforeRead(t *testing.T) {
 
 func TestWriteAndCloseBeforeReads(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader0 := bb.newReader(t.Context())
-	reader1 := bb.newReader(t.Context())
+	reader0 := bb.newReader()
+	reader1 := bb.newReader()
 
 	expected := []byte("some small amount of data that should be recovered correctly")
 
@@ -188,7 +187,7 @@ func TestWriteAndCloseBeforeReads(t *testing.T) {
 
 func TestZeroLengthReadWithDataAvailable(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader := bb.newReader(t.Context())
+	reader := bb.newReader()
 
 	_, err := bb.Write([]byte("hello"))
 	require.NoError(t, err)
@@ -201,7 +200,7 @@ func TestZeroLengthReadWithDataAvailable(t *testing.T) {
 
 func TestZeroLengthReadAfterDrainAndClose(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader := bb.newReader(t.Context())
+	reader := bb.newReader()
 
 	data := []byte("hello")
 	_, err := bb.Write(data)
@@ -218,7 +217,6 @@ func TestZeroLengthReadAfterDrainAndClose(t *testing.T) {
 }
 
 func TestReaderLeavesBeforeWriteFinished(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
 	bb := newBroadcastBuffer()
 
 	expected := []byte("some small amount of data that should be recovered correctly")
@@ -228,14 +226,14 @@ func TestReaderLeavesBeforeWriteFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	done := make(chan struct{})
-	reader := bb.newReader(ctx)
+	reader := bb.newReader()
 	go func() {
 		defer close(done)
 		var readErr error
 		actual, readErr = io.ReadAll(reader)
-		assert.ErrorIs(t, readErr, context.Canceled)
+		assert.ErrorIs(t, readErr, ErrCursorClosed)
 	}()
-	cancel()
+	reader.Close()
 	<-done
 
 	assert.Equal(t, expected, actual)
@@ -243,8 +241,8 @@ func TestReaderLeavesBeforeWriteFinished(t *testing.T) {
 
 func TestMultipleReadersReceiveSameData(t *testing.T) {
 	bb := newBroadcastBuffer()
-	reader0 := bb.newReader(t.Context())
-	reader1 := bb.newReader(t.Context())
+	reader0 := bb.newReader()
+	reader1 := bb.newReader()
 
 	expected := []byte("some small amount of data that should be recovered correctly")
 	var actual0, actual1 []byte
@@ -275,7 +273,7 @@ func TestMultipleReadersReceiveSameData(t *testing.T) {
 func TestReaderSuspendsBeforeWrite(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		bb := newBroadcastBuffer()
-		reader := bb.newReader(t.Context())
+		reader := bb.newReader()
 
 		expected := make([]byte, 0)
 		actual := make([]byte, 0)
@@ -301,9 +299,9 @@ func TestReaderSuspendsBeforeWrite(t *testing.T) {
 func TestReadersSuspendBeforeWrite(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		bb := newBroadcastBuffer()
-		reader0 := bb.newReader(t.Context())
-		reader1 := bb.newReader(t.Context())
-		reader2 := bb.newReader(t.Context())
+		reader0 := bb.newReader()
+		reader1 := bb.newReader()
+		reader2 := bb.newReader()
 
 		expected := make([]byte, 0)
 		var actual0, actual1, actual2 []byte
@@ -340,7 +338,7 @@ func TestReaderSuspendsAtWriteHead(t *testing.T) {
 	for readBufSize := 1; readBufSize <= len(expected); readBufSize++ {
 		synctest.Test(t, func(t *testing.T) {
 			bb := newBroadcastBuffer()
-			reader := bb.newReader(t.Context())
+			reader := bb.newReader()
 
 			actual := make([]byte, 0)
 
@@ -380,8 +378,8 @@ func TestReadersSuspendAtWriteHead(t *testing.T) {
 	for readBufSize := 1; readBufSize <= len(expected); readBufSize++ {
 		synctest.Test(t, func(t *testing.T) {
 			bb := newBroadcastBuffer()
-			reader0 := bb.newReader(t.Context())
-			reader1 := bb.newReader(t.Context())
+			reader0 := bb.newReader()
+			reader1 := bb.newReader()
 
 			var actual0, actual1 []byte
 
@@ -439,7 +437,7 @@ func TestLargeMultipleReaders(t *testing.T) {
 	}
 	createReaderInfo := func(bb *broadcastBuffer) *testReaderInfo {
 		return &testReaderInfo{
-			cur: bb.newReader(t.Context()),
+			cur: bb.newReader(),
 			buf: nil,
 		}
 	}
@@ -482,7 +480,7 @@ func TestInterleavedReadWriteSequence(t *testing.T) {
 	expected := append(append(expectedArr[0], expectedArr[1]...), expectedArr[2]...)
 
 	// reader0 will begin reading before the first write
-	reader0 := bb.newReader(t.Context())
+	reader0 := bb.newReader()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -498,7 +496,7 @@ func TestInterleavedReadWriteSequence(t *testing.T) {
 	assert.Equal(t, expectedArr[0], actual0)
 
 	// reader1 is intentionally created later, and will read one byte
-	reader1 := bb.newReader(t.Context())
+	reader1 := bb.newReader()
 	reader1FirstReadSize := 1
 	done = make(chan struct{})
 	go func() {

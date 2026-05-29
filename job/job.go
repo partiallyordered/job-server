@@ -122,8 +122,8 @@ func Create(executable string, arg ...string) (*Job, error) {
 
 // NewOutputReader returns a reader to which is produced all job output since the creation of the
 // job. The reader will continue to stream until the job finishes or is stopped.
-func (job *Job) NewOutputReader(ctx context.Context) io.Reader {
-	return job.output.newReader(ctx)
+func (job *Job) NewOutputReader(ctx context.Context) io.ReadCloser {
+	return job.output.newReader()
 }
 
 // Stop signals the process with SIGKILL to stop it immediately. Timeouts and graceful termination
