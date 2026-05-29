@@ -72,3 +72,11 @@ func TestForcedTermination(t *testing.T) {
 	assert.Equal(t, StoppedNormally, job.Status().Code)
 	assert.Equal(t, -1, job.Status().ProcExitCode)
 }
+
+func TestStopNormallyExitedJob(t *testing.T) {
+	job, err := createAndStart("true")
+	require.NoError(t, err)
+	require.NoError(t, job.cmd.Wait())
+	err = job.Stop()
+	require.NoError(t, err)
+}

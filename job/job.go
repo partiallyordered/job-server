@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -60,10 +61,9 @@ type Status struct {
 // ErrAttemptToStopStoppedJob occurs when the user calls [Stop] on a stopped job
 var ErrAttemptToStopStoppedJob = errors.New("attempt to stop stopped job")
 
-// Create is a helper function to create a [Job]. Internally, a job is a system process. A
-// created job is started immediately. The job (and process) can be stopped by calling the [Stop]
-// method.
-func Create(executable string, arg ...string) (*Job, error) {
+// createAndStart creates and starts a subprocess, and creates and assigns a buffer to the process
+// output streams.
+func createAndStart(executable string, arg ...string) (*Job, error) {
 	output := newBroadcastBuffer()
 	cmd := exec.Command(executable, arg...)
 
@@ -77,14 +77,25 @@ func Create(executable string, arg ...string) (*Job, error) {
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
-	result := &Job{
+	return &Job{
 		cmd:    cmd,
 		output: output,
 		status: Running,
+	}, nil
+}
+
+// Create is a helper function to create a [Job]. Internally, a job is a system process. A
+// created job is started immediately. The job (and process) can be stopped by calling the [Stop]
+// method.
+func Create(executable string, arg ...string) (*Job, error) {
+	result, err := createAndStart(executable, arg...)
+	if err != nil {
+		return nil, err
 	}
 
+	// spawn a goroutine to wait on the subprocess exit and update the job status etc.
 	go func() {
-		cmdErr := cmd.Wait()
+		cmdErr := result.cmd.Wait()
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		if cmdErr != nil {
@@ -94,7 +105,7 @@ func Create(executable string, arg ...string) (*Job, error) {
 				result.err = fmt.Errorf("system error: %w", cmdErr)
 			}
 		}
-		result.exitCode = cmd.ProcessState.ExitCode()
+		result.exitCode = result.cmd.ProcessState.ExitCode()
 		result.status = ExternallyStopped
 		if result.stopRequested || result.exitCode != -1 {
 			result.status = StoppedNormally
@@ -123,7 +134,7 @@ func (job *Job) Stop() error {
 	if job.status != Running {
 		return ErrAttemptToStopStoppedJob
 	}
-	if err := job.cmd.Process.Kill(); err != nil {
+	if err := job.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return fmt.Errorf("error killing process: %w", err)
 	}
 	job.stopRequested = true
