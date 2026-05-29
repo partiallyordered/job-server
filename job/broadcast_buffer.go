@@ -80,16 +80,14 @@ func (bb *broadcastBuffer) Write(p []byte) (int, error) {
 // readChunk is a convenience function that simplifies the call tree and makes it a little easier
 // to manage mutexes. It takes the read lock, reads a chunk of data if available, and returns
 // information about what it's read as well as updated broadcastBuffer state.
-func (c *cursor) readChunk(p []byte) (int, int, bool, <-chan struct{}) {
+func (c *cursor) readChunk(p []byte) (n int, available int, closed bool, sigCh <-chan struct{}) {
 	c.buf.mu.RLock()
-	sigCh := c.buf.signalCh
-	closed := c.buf.closed
+	sigCh = c.buf.signalCh
+	closed = c.buf.closed
 	data := c.buf.data
 	c.buf.mu.RUnlock()
 
-	var n int
-
-	available := len(data) - c.off
+	available = len(data) - c.off
 	if available > 0 {
 		n = copy(p, data[c.off:])
 		c.off += n
