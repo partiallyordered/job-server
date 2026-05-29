@@ -82,18 +82,20 @@ func (bb *broadcastBuffer) Write(p []byte) (int, error) {
 // information about what it's read as well as updated broadcastBuffer state.
 func (c *cursor) readChunk(p []byte) (int, int, bool, <-chan struct{}) {
 	c.buf.mu.RLock()
-	defer c.buf.mu.RUnlock()
+	sigCh := c.buf.signalCh
+	closed := c.buf.closed
+	data := c.buf.data
+	c.buf.mu.RUnlock()
 
 	var n int
 
-	available := len(c.buf.data) - c.off
-
+	available := len(data) - c.off
 	if available > 0 {
-		n = copy(p, c.buf.data[c.off:])
+		n = copy(p, data[c.off:])
 		c.off += n
 	}
 
-	return n, available, c.buf.closed, c.buf.signalCh
+	return n, available, closed, sigCh
 }
 
 // Read implements the reader interface. It will block when there is no data to read but the
