@@ -21,7 +21,7 @@ func TestEchoHello(t *testing.T) {
 	result, err := io.ReadAll(r)
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
-	assert.Equal(t, 0, job.Status().LinuxExitCode)
+	assert.Equal(t, 0, job.Status().ProcExitCode)
 	assert.Equal(t, expected, result)
 }
 
@@ -33,7 +33,7 @@ func TestNonZeroExitCode(t *testing.T) {
 	_, err = io.ReadAll(job.NewOutputReader(t.Context())) // blocks until after job completion
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
-	assert.Equal(t, code, job.Status().LinuxExitCode)
+	assert.Equal(t, code, job.Status().ProcExitCode)
 }
 
 func TestStderrOutput(t *testing.T) {
@@ -46,7 +46,7 @@ func TestStderrOutput(t *testing.T) {
 	result, err := io.ReadAll(r)
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
-	assert.Equal(t, 0, job.Status().LinuxExitCode)
+	assert.Equal(t, 0, job.Status().ProcExitCode)
 	assert.Equal(t, expected, result)
 }
 
@@ -59,7 +59,7 @@ func TestStderrAndStdoutOutput(t *testing.T) {
 	output, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
-	assert.Equal(t, 0, job.Status().LinuxExitCode)
+	assert.Equal(t, 0, job.Status().ProcExitCode)
 	assert.Equal(t, expected, output)
 }
 
@@ -70,5 +70,5 @@ func TestForcedTermination(t *testing.T) {
 	_, err = io.ReadAll(job.NewOutputReader(t.Context())) // blocks until after job completion
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
-	assert.Equal(t, -1, job.Status().LinuxExitCode)
+	assert.Equal(t, -1, job.Status().ProcExitCode)
 }

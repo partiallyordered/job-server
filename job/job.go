@@ -52,9 +52,9 @@ const (
 // terminated forcefully, by [Stop]. The Error field will be set in case of a system error outside
 // of the running job, i.e. an I/O error.
 type Status struct {
-	Error         string
-	Code          StatusCode
-	LinuxExitCode int
+	ManagerError string
+	Code         StatusCode
+	ProcExitCode int
 }
 
 // ErrAttemptToStopStoppedJob occurs when the user calls [Stop] on a stopped job
@@ -140,8 +140,8 @@ func (job *Job) Status() Status {
 		errStr = job.err.Error()
 	}
 	return Status{
-		LinuxExitCode: job.exitCode,
-		Code:          job.status,
-		Error:         errStr,
+		ProcExitCode: job.exitCode,
+		Code:         job.status,
+		ManagerError: errStr,
 	}
 }
