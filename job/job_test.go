@@ -17,7 +17,7 @@ func TestEchoHello(t *testing.T) {
 	job, err := Create("echo", "-n", greeting)
 	require.NoError(t, err)
 	require.Equal(t, Running, job.Status().Code)
-	r := job.NewOutputReader(t.Context())
+	r := job.NewOutputReader()
 	result, err := io.ReadAll(r)
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
@@ -30,7 +30,7 @@ func TestNonZeroExitCode(t *testing.T) {
 	job, err := Create("bash", "-c", fmt.Sprintf("exit %d", code))
 	require.NoError(t, err)
 	require.Equal(t, Running, job.Status().Code)
-	_, err = io.ReadAll(job.NewOutputReader(t.Context())) // blocks until after job completion
+	_, err = io.ReadAll(job.NewOutputReader()) // blocks until after job completion
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
 	assert.Equal(t, code, job.Status().ProcExitCode)
@@ -42,7 +42,7 @@ func TestStderrOutput(t *testing.T) {
 	job, err := Create("bash", "-c", "echo -n "+greeting+" >&2")
 	require.NoError(t, err)
 	require.Equal(t, Running, job.Status().Code)
-	r := job.NewOutputReader(t.Context())
+	r := job.NewOutputReader()
 	result, err := io.ReadAll(r)
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
@@ -55,7 +55,7 @@ func TestStderrAndStdoutOutput(t *testing.T) {
 	expected := append([]byte(greeting), greeting...)
 	job, err := Create("bash", "-c", "echo -n "+greeting+" | tee /dev/stderr")
 	require.NoError(t, err)
-	reader := job.NewOutputReader(t.Context())
+	reader := job.NewOutputReader()
 	output, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
@@ -67,7 +67,7 @@ func TestForcedTermination(t *testing.T) {
 	job, err := Create("sleep", "infinity")
 	require.NoError(t, err)
 	require.NoError(t, job.Stop())
-	_, err = io.ReadAll(job.NewOutputReader(t.Context())) // blocks until after job completion
+	_, err = io.ReadAll(job.NewOutputReader()) // blocks until after job completion
 	require.NoError(t, err)
 	assert.Equal(t, StoppedNormally, job.Status().Code)
 	assert.Equal(t, -1, job.Status().ProcExitCode)

@@ -6,7 +6,6 @@
 package job
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -122,7 +121,7 @@ func Create(executable string, arg ...string) (*Job, error) {
 
 // NewOutputReader returns a reader to which is produced all job output since the creation of the
 // job. The reader will continue to stream until the job finishes or is stopped.
-func (job *Job) NewOutputReader(ctx context.Context) io.ReadCloser {
+func (job *Job) NewOutputReader() io.ReadCloser {
 	return job.output.newReader()
 }
 
