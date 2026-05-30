@@ -22,3 +22,7 @@ pushd client
 mv client-ca.crt ../server/
 popd
 ```
+
+#### TODO
+
+- share allowlists with clients (statically, as in a file, or dynamically, as in a request)- as implemented, it's trial-and-error
