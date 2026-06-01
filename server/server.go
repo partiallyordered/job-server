@@ -194,7 +194,9 @@ func (s *server) CreateJob(
 		s.jobs.Delete(jobID)
 		return nil, status.Errorf(codes.Internal, "failed to create job: %v", err)
 	}
-	s.jobs.Store(jobID, job)
+	if err := s.jobs.Store(jobID, job); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to store job in server: %v", err)
+	}
 	return &pb.CreateJobResponse{}, nil
 }
 
