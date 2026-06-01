@@ -228,7 +228,13 @@ func (s *server) StreamJobLog(
 			resp := pb.StreamJobLogResponse_builder{
 				Output: p[:n],
 			}.Build()
-			srv.Send(resp)
+			if err := srv.Send(resp); err != nil {
+				if err := reader.Close(); err != nil {
+					log.Printf("unexpected/unhandled error closing reader: %v", err)
+				}
+				log.Printf("grpc stream terminated unexpectedly: %v", err)
+				return nil
+			}
 		}
 	}
 }
