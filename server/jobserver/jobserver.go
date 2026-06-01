@@ -1,22 +1,15 @@
-// Program server implements a gRPC job server. It accepts client connections secured with mTLS,
+// Package jobserver implements a gRPC job server. It accepts client connections secured with mTLS,
 // authenticating clients by the email SAN in their certificate and authorizing them against a
 // static allowlist of permitted executables. It exposes RPCs to create jobs, stream their output,
 // stop them, and query their status.
-package main
+package jobserver
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"math"
-	"net"
-	"os"
 	"os/exec"
 	"slices"
 	"sync"
@@ -41,6 +34,7 @@ var clientAllowlist = map[string][]string{
 		"/usr/bin/cat",
 		"/usr/bin/yes",
 		"/usr/bin/echo",
+		"/usr/bin/ping",
 	},
 }
 
@@ -114,9 +108,9 @@ func authorizeExecutable(ctx context.Context, executable string) (string, error)
 	return resolveAllowed(identity, executable)
 }
 
-// server implements the Job service server defined in the protocol buffer spec in this repository.
+// JobServer implements the Job service JobServer defined in the protocol buffer spec in this repository.
 // It embeds a map to manage jobs.
-type server struct {
+type JobServer struct {
 	pb.UnimplementedJobServiceServer
 	jobs sync.Map
 }
@@ -141,7 +135,7 @@ func loadJob(m *sync.Map, k string) (*job.Job, error) {
 // CreateJob creates a job and stores it on the server. Authorization is handled by checking the
 // peer subject alternative name against an allowlist of peer/binary pairs. If the peer/binary is
 // present, the executable will be allowed to run.
-func (s *server) CreateJob(
+func (s *JobServer) CreateJob(
 	ctx context.Context,
 	req *pb.CreateJobRequest,
 ) (*pb.CreateJobResponse, error) {
@@ -173,7 +167,7 @@ func (s *server) CreateJob(
 }
 
 // StreamJobLog streams a job log until completion, or until the client disconnects.
-func (s *server) StreamJobLog(
+func (s *JobServer) StreamJobLog(
 	req *pb.StreamJobLogRequest,
 	srv grpc.ServerStreamingServer[pb.StreamJobLogResponse],
 ) error {
@@ -216,7 +210,7 @@ func (s *server) StreamJobLog(
 }
 
 // StopJob stops a job.
-func (s *server) StopJob(
+func (s *JobServer) StopJob(
 	ctx context.Context,
 	req *pb.StopJobRequest,
 ) (*pb.StopJobResponse, error) {
@@ -235,7 +229,7 @@ func (s *server) StopJob(
 }
 
 // GetJobStatus returns the status of a job.
-func (s *server) GetJobStatus(
+func (s *JobServer) GetJobStatus(
 	_ context.Context,
 	req *pb.GetJobStatusRequest,
 ) (*pb.GetJobStatusResponse, error) {
@@ -272,98 +266,4 @@ func (s *server) GetJobStatus(
 		ProcExitCode: &returnExitCode,
 		ManagerErr:   &st.ManagerError,
 	}.Build(), nil
-}
-
-// validateCreds returns an error for server certs and client CA certs that do not use Ed25519 keys.
-func validateCreds(serverCert *tls.Certificate, clientCaCert *x509.Certificate) error {
-	if _, ok := serverCert.PrivateKey.(ed25519.PrivateKey); !ok {
-		return errors.New("server private key must be Ed25519")
-	}
-	if _, ok := clientCaCert.PublicKey.(ed25519.PublicKey); !ok {
-		return errors.New("client CA cert must be signed with an Ed25519 key")
-	}
-	return nil
-}
-
-// acceptOnlyed25519 is used as the verifyPeerCertificate property when we create a [tls.Config].
-// It rejects client certificates not using an Ed25519 key.
-func acceptOnlyEd25519ClientCertKey(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-	cert, err := x509.ParseCertificate(rawCerts[0])
-	if err != nil {
-		return fmt.Errorf("parsing client certificate: %w", err)
-	}
-	if _, ok := cert.PublicKey.(ed25519.PublicKey); !ok {
-		return errors.New("client certificate must use an Ed25519 key")
-	}
-	return nil
-}
-
-// loadCreds loads the server certificate, private key and client CA cert for mTLS. It will return
-// an error if
-// - it cannot read the files containing these credentials, or
-// - it cannot decode them, or
-// - any non-Ed25519 keys are used
-func loadCreds() (credentials.TransportCredentials, error) {
-	// TODO: normally we'd let the user supply the location of their creds as configuration.
-	serverCert, err := tls.LoadX509KeyPair("server.crt", "server.key")
-	if err != nil {
-		return nil, fmt.Errorf("loading server cert/key: %w", err)
-	}
-
-	clientCaCertPem, err := os.ReadFile("client-ca.crt")
-	if err != nil {
-		return nil, fmt.Errorf("reading client CA cert: %w", err)
-	}
-
-	// In order to ensure a secure configuration we accept only Ed25519-signed certs
-	// TODO: here, we only read the first PEM block in the input data. Should read all, but we know
-	// our input contains only one.
-	block, _ := pem.Decode(clientCaCertPem)
-	if block == nil {
-		return nil, errors.New("decoding client CA cert PEM")
-	}
-	clientCaCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parsing client CA cert: %w", err)
-	}
-
-	if err := validateCreds(&serverCert, clientCaCert); err != nil {
-		return nil, fmt.Errorf("validating credentials: %w", err)
-	}
-
-	clientCAs := x509.NewCertPool()
-	clientCAs.AddCert(clientCaCert)
-
-	return credentials.NewTLS(&tls.Config{
-		Certificates:          []tls.Certificate{serverCert},
-		ClientAuth:            tls.RequireAndVerifyClientCert,
-		ClientCAs:             clientCAs,
-		MinVersion:            tls.VersionTLS13,
-		VerifyPeerCertificate: acceptOnlyEd25519ClientCertKey,
-	}), nil
-}
-
-// run is essentially "main that runs defers"
-func run() error {
-	creds, err := loadCreds()
-	if err != nil {
-		return fmt.Errorf("loading TLS credentials: %w", err)
-	}
-	lis, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		return err
-	}
-	s := grpc.NewServer(grpc.Creds(creds))
-	defer s.Stop()
-	pb.RegisterJobServiceServer(s, &server{})
-	if err := s.Serve(lis); err != nil {
-		return err
-	}
-	return nil
-}
-
-func main() {
-	if err := run(); err != nil {
-		log.Fatalf("error running server: %s", err.Error())
-	}
 }
