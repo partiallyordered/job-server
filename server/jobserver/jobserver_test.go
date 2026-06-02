@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	pb "github.com/partiallyordered/int-backend-matt-1/gen/job_service/v1"
 	"github.com/partiallyordered/int-backend-matt-1/internal"
@@ -101,7 +102,11 @@ func TestServerRejectsNonEd25519ClientCert(t *testing.T) {
 	require.NoError(t, err)
 	clientCert, err := x509.CreateCertificate(
 		rng,
-		&x509.Certificate{SerialNumber: big.NewInt(1)},
+		&x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			NotBefore:    time.Now().Add(-time.Hour),
+			NotAfter:     time.Now().Add(time.Hour),
+		},
 		caCert,
 		ecKey.Public(),
 		caKey,
@@ -120,14 +125,15 @@ func TestServerRejectsNonEd25519ClientCert(t *testing.T) {
 				Certificate: [][]byte{clientCert},
 				PrivateKey:  ecKey,
 			}},
-			MinVersion: tls.VersionTLS13,
+			InsecureSkipVerify: true,
+			MinVersion:         tls.VersionTLS13,
 		})),
 	)
 	require.NoError(t, err)
 	defer grpcConn.Close()
 
 	_, err = pb.NewJobServiceClient(grpcConn).GetJobStatus(t.Context(), new(pb.GetJobStatusRequest))
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "bad certificate")
 }
 
 func TestServerRejectsTLS12(t *testing.T) {

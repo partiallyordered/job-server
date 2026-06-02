@@ -11,11 +11,11 @@ import (
 
 	"github.com/partiallyordered/int-backend-matt-1/client/cmd"
 	pb "github.com/partiallyordered/int-backend-matt-1/gen/job_service/v1"
+	"github.com/partiallyordered/int-backend-matt-1/internal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-// TODO: test the client validates the server cert
 const serverAddr = "localhost:8080"
 
 func loadCreds() (credentials.TransportCredentials, error) {
@@ -47,10 +47,10 @@ func loadCreds() (credentials.TransportCredentials, error) {
 	pool.AddCert(serverCaCert)
 
 	return credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{clientCert},
-		RootCAs:      pool,
-		MinVersion:   tls.VersionTLS13,
-		// TODO: VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error,
+		Certificates:          []tls.Certificate{clientCert},
+		RootCAs:               pool,
+		MinVersion:            tls.VersionTLS13,
+		VerifyPeerCertificate: internal.AcceptOnlyEd25519CertKey,
 	}), nil
 }
 

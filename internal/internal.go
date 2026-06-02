@@ -25,15 +25,15 @@ func validateCreds(serverCert *tls.Certificate, clientCaCert *x509.Certificate) 
 	return nil
 }
 
-// acceptOnlyed25519 is used as the verifyPeerCertificate property when we create a [tls.Config].
-// It rejects client certificates not using an Ed25519 key.
-func acceptOnlyEd25519ClientCertKey(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+// AcceptOnlyEd25519CertKey is used as the verifyPeerCertificate property when we create a
+// [tls.Config]. It rejects client certificates not using an Ed25519 key.
+func AcceptOnlyEd25519CertKey(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	cert, err := x509.ParseCertificate(rawCerts[0])
 	if err != nil {
 		return fmt.Errorf("parsing client certificate: %w", err)
 	}
 	if _, ok := cert.PublicKey.(ed25519.PublicKey); !ok {
-		return errors.New("client certificate must use an Ed25519 key")
+		return errors.New("certificate must use an Ed25519 key")
 	}
 	return nil
 }
@@ -82,6 +82,6 @@ func LoadCreds(
 		ClientAuth:            tls.RequireAndVerifyClientCert,
 		ClientCAs:             clientCAs,
 		MinVersion:            tls.VersionTLS13,
-		VerifyPeerCertificate: acceptOnlyEd25519ClientCertKey,
+		VerifyPeerCertificate: AcceptOnlyEd25519CertKey,
 	}), nil
 }
