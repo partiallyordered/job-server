@@ -24,11 +24,17 @@ func run() error {
 	// TODO: expose the listener parameters to config
 	lis, err := net.Listen("tcp", ":8080")
 	if err != nil {
-		return err
+		return fmt.Errorf("creating listener on :8080: %w", err)
 	}
+
+	allowlist, err := internal.GenerateAllowList()
+	if err != nil {
+		return fmt.Errorf("generating executable allowlist: %w", err)
+	}
+
 	s := grpc.NewServer(grpc.Creds(creds))
 	defer s.Stop()
-	pb.RegisterJobServiceServer(s, &jobserver.JobServer{})
+	pb.RegisterJobServiceServer(s, jobserver.Create(allowlist))
 	if err := s.Serve(lis); err != nil {
 		return err
 	}

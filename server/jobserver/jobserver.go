@@ -25,19 +25,6 @@ import (
 
 const streamBufSize int = 32 * 1024 // 32 KiB
 
-// clientAllowList should contain the client SAN and a list of absolute system paths the client
-// shall be permitted to execute.
-// TODO: replace with configurable policy- startup or runtime.
-var clientAllowlist = map[string][]string{
-	"int-backend-matt-1-client@domain.local": {
-		"/usr/bin/true",
-		"/usr/bin/cat",
-		"/usr/bin/yes",
-		"/usr/bin/echo",
-		"/usr/bin/ping",
-	},
-}
-
 // resolveSAN extracts a gRPC peer from the supplied context, then progressively refines the peer
 // information to retrieve the subject alternative name from the TLS cert. Only e-mail SANs are
 // supported.
@@ -74,8 +61,8 @@ func resolveSAN(ctx context.Context) (string, error) {
 // case. If the identity is permitted to execute the executable, the absolute path of the
 // executable will be returned. This means the caller can avoid resolving the path a second time
 // with a potentially different result (e.g. if PATH has changed between the two invocations).
-func resolveAllowed(identity string, executable string) (string, error) {
-	allowed, ok := clientAllowlist[identity]
+func resolveAllowed(allowlist map[string][]string, identity string, executable string) (string, error) {
+	allowed, ok := allowlist[identity]
 	if !ok {
 		return "", status.Errorf(codes.PermissionDenied, "client %q not present in system", identity)
 	}
@@ -100,19 +87,33 @@ func resolveAllowed(identity string, executable string) (string, error) {
 // path of the executable will be returned. This means the caller can avoid resolving the path a
 // second time with a potentially different result (e.g. if PATH has changed between the two
 // invocations).
-func authorizeExecutable(ctx context.Context, executable string) (string, error) {
+func authorizeExecutable(
+	ctx context.Context,
+	allowlist map[string][]string,
+	executable string,
+) (string, error) {
 	identity, err := resolveSAN(ctx)
 	if err != nil {
 		return "", err
 	}
-	return resolveAllowed(identity, executable)
+	return resolveAllowed(allowlist, identity, executable)
 }
 
-// JobServer implements the Job service JobServer defined in the protocol buffer spec in this repository.
-// It embeds a map to manage jobs.
+// JobServer implements the Job service JobServer defined in the protocol buffer spec in this
+// repository. It contains a map to manage jobs.
 type JobServer struct {
 	pb.UnimplementedJobServiceServer
-	jobs sync.Map
+	jobs      sync.Map
+	allowlist map[string][]string
+}
+
+// Create takes an allowlist that maps a TLS cert subject alternative name to a list of executables
+// the entity represented by that SAN is permitted to execute as a job. Create returns a
+// [JobServer] with said allowlist.
+func Create(allowlist map[string][]string) *JobServer {
+	return &JobServer{
+		allowlist: allowlist,
+	}
 }
 
 // loadJob looks up a [job.Job] corresponding to the supplied job ID. If no corresponding Job is
@@ -145,7 +146,7 @@ func (s *JobServer) CreateJob(
 		// confusing in some contexts.
 		return nil, status.Error(codes.InvalidArgument, "job ID must have non-zero length")
 	}
-	execPathAbs, err := authorizeExecutable(ctx, req.GetExecutable())
+	execPathAbs, err := authorizeExecutable(ctx, s.allowlist, req.GetExecutable())
 	if err != nil {
 		return nil, err
 	}

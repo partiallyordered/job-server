@@ -28,21 +28,14 @@ import (
 
 const testClientIdentity = "int-backend-matt-1-client@domain.local"
 
-func withAllowlist(t *testing.T, l map[string][]string) {
-	t.Helper()
-	orig := clientAllowlist
-	clientAllowlist = l
-	t.Cleanup(func() { clientAllowlist = orig })
-}
-
-func startServer(t *testing.T) *bufconn.Listener {
+func startServer(t *testing.T, allowlist map[string][]string) *bufconn.Listener {
 	const bufSize = 1024 * 1024
 	t.Helper()
 	lis := bufconn.Listen(bufSize)
 	creds, err := internal.LoadCreds("../server.crt", "../server.key", "../client-ca.crt")
 	require.NoError(t, err)
 	s := grpc.NewServer(grpc.Creds(creds))
-	pb.RegisterJobServiceServer(s, &JobServer{})
+	pb.RegisterJobServiceServer(s, Create(allowlist))
 	go func() {
 		if err := s.Serve(lis); err != nil && err != grpc.ErrServerStopped {
 			assert.NoError(t, err)
@@ -113,7 +106,10 @@ func TestServerRejectsNonEd25519ClientCert(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	lis := startServer(t)
+	allowlist, err := internal.GenerateAllowList()
+	require.NoError(t, err)
+
+	lis := startServer(t, allowlist)
 
 	grpcConn, err := grpc.NewClient(
 		"passthrough://bufnet",
@@ -137,7 +133,10 @@ func TestServerRejectsNonEd25519ClientCert(t *testing.T) {
 }
 
 func TestServerRejectsTLS12(t *testing.T) {
-	lis := startServer(t)
+	allowlist, err := internal.GenerateAllowList()
+	require.NoError(t, err)
+
+	lis := startServer(t, allowlist)
 
 	grpcConn, err := grpc.NewClient(
 		"passthrough://bufnet",
@@ -156,42 +155,45 @@ func TestServerRejectsTLS12(t *testing.T) {
 }
 
 func TestResolveAllowed(t *testing.T) {
-	const testIdentity = "test@example.com"
+	const testIdentity = "int-backend-matt-1-client@domain.local"
 
 	truePath, err := exec.LookPath("true")
 	require.NoError(t, err)
 
 	t.Run("resolves bare name", func(t *testing.T) {
-		withAllowlist(t, map[string][]string{testIdentity: {truePath}})
-		_, err := resolveAllowed(testIdentity, "true")
+		allowlist, err := internal.GenerateAllowList()
+		require.NoError(t, err)
+		_, err = resolveAllowed(allowlist, testIdentity, "true")
 		assert.NoError(t, err)
 	})
 
 	t.Run("allows absolute path", func(t *testing.T) {
-		withAllowlist(t, map[string][]string{testIdentity: {truePath}})
-		_, err := resolveAllowed(testIdentity, truePath)
+		allowlist, err := internal.GenerateAllowList()
+		require.NoError(t, err)
+		_, err = resolveAllowed(allowlist, testIdentity, truePath)
 		assert.NoError(t, err)
 	})
 
 	t.Run("rejects unallowed executable", func(t *testing.T) {
-		withAllowlist(t, map[string][]string{testIdentity: {truePath}})
-		_, err := resolveAllowed(testIdentity, "bash")
+		allowlist, err := internal.GenerateAllowList()
+		require.NoError(t, err)
+		_, err = resolveAllowed(allowlist, testIdentity, "bash")
 		assert.ErrorContains(t, err, "not permitted")
 	})
 
 	t.Run("rejects nonexistent executable", func(t *testing.T) {
-		withAllowlist(t, map[string][]string{testIdentity: {}})
-		_, err := resolveAllowed(testIdentity, "this-does-not-exist")
+		allowlist, err := internal.GenerateAllowList()
+		require.NoError(t, err)
+		_, err = resolveAllowed(allowlist, testIdentity, "non-existent-executable")
 		assert.ErrorContains(t, err, "not found")
 	})
 }
 
 func TestCreateJob(t *testing.T) {
 	executable := "echo"
-	echoPath, err := exec.LookPath(executable)
+	allowlist, err := internal.GenerateAllowList()
 	require.NoError(t, err)
-	withAllowlist(t, map[string][]string{testClientIdentity: {echoPath}})
-	lis := startServer(t)
+	lis := startServer(t, allowlist)
 	client := newClient(t, lis)
 
 	jobID := "test create job"
@@ -206,10 +208,9 @@ func TestCreateJob(t *testing.T) {
 
 func TestGetJobStatus(t *testing.T) {
 	executable := "echo"
-	echoPath, err := exec.LookPath(executable)
+	allowlist, err := internal.GenerateAllowList()
 	require.NoError(t, err)
-	withAllowlist(t, map[string][]string{testClientIdentity: {echoPath}})
-	lis := startServer(t)
+	lis := startServer(t, allowlist)
 	client := newClient(t, lis)
 
 	jobID := "test job status"
@@ -228,10 +229,9 @@ func TestGetJobStatus(t *testing.T) {
 
 func TestStopJob(t *testing.T) {
 	executable := "yes"
-	yesPath, err := exec.LookPath(executable)
+	allowlist, err := internal.GenerateAllowList()
 	require.NoError(t, err)
-	withAllowlist(t, map[string][]string{testClientIdentity: {yesPath}})
-	lis := startServer(t)
+	lis := startServer(t, allowlist)
 	client := newClient(t, lis)
 
 	jobID := "test stop job"
@@ -249,10 +249,9 @@ func TestStopJob(t *testing.T) {
 
 func TestStreamJobLogEcho(t *testing.T) {
 	executable := "echo"
-	echoPath, err := exec.LookPath(executable)
+	allowlist, err := internal.GenerateAllowList()
 	require.NoError(t, err)
-	withAllowlist(t, map[string][]string{testClientIdentity: {echoPath}})
-	lis := startServer(t)
+	lis := startServer(t, allowlist)
 	client := newClient(t, lis)
 
 	jobID := "test stream echo"
@@ -282,9 +281,8 @@ func TestStreamJobLogEcho(t *testing.T) {
 
 func TestStreamJobLogBinaryData(t *testing.T) {
 	executable := "cat"
-	catPath, err := exec.LookPath(executable)
+	allowlist, err := internal.GenerateAllowList()
 	require.NoError(t, err)
-	withAllowlist(t, map[string][]string{testClientIdentity: {catPath}})
 
 	rng := rand.NewChaCha8([32]byte{42})
 	expected := make([]byte, streamBufSize*2+1)
@@ -295,7 +293,7 @@ func TestStreamJobLogBinaryData(t *testing.T) {
 	err = os.WriteFile(tmpFile, expected, 0o600)
 	require.NoError(t, err)
 
-	lis := startServer(t)
+	lis := startServer(t, allowlist)
 	client := newClient(t, lis)
 	jobID := "test stream binary"
 	_, err = client.CreateJob(t.Context(), pb.CreateJobRequest_builder{

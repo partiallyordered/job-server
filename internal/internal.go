@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"google.golang.org/grpc/credentials"
 )
@@ -84,4 +85,24 @@ func LoadCreds(
 		MinVersion:            tls.VersionTLS13,
 		VerifyPeerCertificate: AcceptOnlyEd25519CertKey,
 	}), nil
+}
+
+// GenerateAllowList contains a list of binaries and retrieves their absolute paths on the host
+// system in order to build the allowlist. The identity in the allowlist is hardcoded to correspond
+// to the secrets generated for the challenge.
+// TODO: this is not the correct way to build the allowlist. The allowlist should be exposed as
+// config and generated external to this program. This is because this program is not equipped to
+// manage permissions on those binaries, nor determine whether they're the intended program, nor
+// assign authorization, all of which is essential for security. The allowlist is generated as
+// follows for the purposes of demonstration in the context of the challenge.
+func GenerateAllowList() (map[string][]string, error) {
+	binaries := []string{"true", "cat", "yes", "echo", "ping"}
+	for i, bin := range binaries {
+		pathAbs, err := exec.LookPath(bin)
+		if err != nil {
+			return nil, fmt.Errorf("looking up binary %s in local system for allowlist: %w", bin, err)
+		}
+		binaries[i] = pathAbs
+	}
+	return map[string][]string{"int-backend-matt-1-client@domain.local": binaries}, nil
 }

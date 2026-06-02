@@ -14,6 +14,16 @@ go build -o server
 ./server
 ```
 
+##### With Podman/Docker
+
+You can alternatively run the server as follows (if you have docker instead of podman, that _should_ work equally well):
+
+```sh
+podman build -t int-backend-matt-1-server .
+# --cap-add NET_RAW is required for ping; which is a nice demonstration of the program functionality
+podman run --cap-add NET_RAW -p 8080:8080 int-backend-matt-1-server
+```
+
 #### Client
 
 ```sh
@@ -23,14 +33,6 @@ go build -o job
 ./job status my-ping
 ./job stream my-ping
 ./job stop my-ping
-```
-
-If receiving permissions errors when trying to start a job, it's likely your system doesn't have binaries at the hard-coded allowlist paths (`/usr/bin/ping` etc.). You can run the server as follows (if you have docker instead of podman, that _should_ work equally well):
-
-```sh
-podman build -t int-backend-matt-1-server .
-# --cap-add NET_RAW is required for ping; which is a nice demonstration of the program functionality
-podman run --cap-add NET_RAW -p 8080:8080 int-backend-matt-1-server
 ```
 
 ### Development

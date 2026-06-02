@@ -31,7 +31,11 @@ func startServer(t *testing.T) *bufconn.Listener {
 	)
 	require.NoError(t, err)
 	s := grpc.NewServer(grpc.Creds(creds))
-	pb.RegisterJobServiceServer(s, &jobserver.JobServer{})
+
+	allowlist, err := internal.GenerateAllowList()
+	require.NoError(t, err)
+
+	pb.RegisterJobServiceServer(s, jobserver.Create(allowlist))
 	go func() {
 		if err := s.Serve(lis); err != nil && err != grpc.ErrServerStopped {
 			assert.NoError(t, err)
