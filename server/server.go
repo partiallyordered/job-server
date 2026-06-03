@@ -203,8 +203,7 @@ func (s *server) StreamJobLog(
 				if err := reader.Close(); err != nil {
 					log.Printf("unexpected/unhandled error closing reader: %v", err)
 				}
-				log.Printf("grpc stream terminated unexpectedly: %v", err)
-				return nil
+				return status.Errorf(codes.Internal, "grpc stream terminated unexpectedly: %v", err)
 			}
 		}
 	}
