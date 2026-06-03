@@ -190,7 +190,7 @@ func (s *server) StreamJobLog(
 	for {
 		n, err := reader.Read(p)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) || errors.Is(err, job.ErrCursorClosed) {
 				return nil
 			}
 			return status.Errorf(codes.Internal, "reading process output: %v", err)
