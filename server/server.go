@@ -113,58 +113,24 @@ func authorizeExecutable(ctx context.Context, executable string) error {
 // It embeds a map to manage jobs.
 type server struct {
 	pb.UnimplementedJobServiceServer
-	jobs jobMap
+	jobs sync.Map
 }
 
-// jobMap wraps a sync.Map in order to add some type-safety. The documentation for sync.Map states:
-//
-// The Map type is optimized for two common use cases: (1) when the entry for a given key is only
-// ever written once but read many times, as in caches that only grow, or (2) when multiple
-// goroutines read, write, and overwrite entries for disjoint sets of keys. In these two cases, use
-// of a Map may significantly reduce lock contention compared to a Go map paired with a separate
-// Mutex or RWMutex.
-//
-// Our use-case is 2-3 writes before any reads commence- after which there should be no further
-// writes. sync.Map should give us some advantage here.
-type jobMap struct {
-	m sync.Map
-}
-
-// Load looks up a [job.Job] corresponding to the supplied job ID. If no corresponding Job is found
-// this function will return (nil, false). If a job is found, this function will return
-// (*job, true).
-func (m *jobMap) Load(k string) (*job.Job, bool) {
-	j, ok := m.m.Load(k)
+// loadJob looks up a [job.Job] corresponding to the supplied job ID. If no corresponding Job is
+// found this function will return (nil, nil). If a job is found, this function will return
+// (*job, nil).
+func loadJob(m *sync.Map, k string) (*job.Job, error) {
+	found, ok := m.Load(k)
 	// The job could be nil if the name has been reserved but the job not yet created. In this case,
 	// readers should consider that there is no job.
-	if !ok || j == nil {
-		return nil, false
+	if !ok || found == nil {
+		return nil, nil
 	}
-	return j.(*job.Job), true
-}
-
-// Reserve writes a nil value to the map in order to reserve the job ID before starting the job.
-func (m *jobMap) Reserve(k string) bool {
-	_, alreadyPresent := m.m.LoadOrStore(k, nil)
-	return !alreadyPresent
-}
-
-// Delete deletes the value for a key.
-// If the key is not in the map, Delete does nothing.
-// (copied doc for sync.Map.Delete)
-func (m *jobMap) Delete(k string) {
-	m.m.Delete(k)
-}
-
-// Store stores a [job.Job] indexed by its job ID. If the job ID already exists in the map, an error
-// will be returned. When creating a job, the job name is reserved by inserting a nil entry then
-// later overriding it.
-func (m *jobMap) Store(k string, v *job.Job) error {
-	if v == nil {
-		return errors.New("attempted to store a nil job")
+	j, ok := found.(*job.Job)
+	if !ok {
+		return nil, errors.New("loading job: job found not of correct type")
 	}
-	m.m.Store(k, v)
-	return nil
+	return j, nil
 }
 
 // CreateJob creates a job and stores it on the server. Authorization is handled by checking the
@@ -185,7 +151,8 @@ func (s *server) CreateJob(
 	}
 
 	// We reserve the job ID here then start the job to avoid a race when storing the job later.
-	if !s.jobs.Reserve(jobID) {
+	_, alreadyPresent := s.jobs.LoadOrStore(jobID, nil)
+	if alreadyPresent {
 		return nil, status.Error(codes.AlreadyExists, "job ID already exists")
 	}
 	job, err := job.Create(req.GetExecutable(), req.GetArgs()...)
@@ -194,9 +161,8 @@ func (s *server) CreateJob(
 		s.jobs.Delete(jobID)
 		return nil, status.Errorf(codes.Internal, "failed to create job: %v", err)
 	}
-	if err := s.jobs.Store(jobID, job); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to store job in server: %v", err)
-	}
+	s.jobs.Store(jobID, job)
+
 	return &pb.CreateJobResponse{}, nil
 }
 
@@ -205,8 +171,11 @@ func (s *server) StreamJobLog(
 	req *pb.StreamJobLogRequest,
 	srv grpc.ServerStreamingServer[pb.StreamJobLogResponse],
 ) error {
-	j, ok := s.jobs.Load(req.GetJobId())
-	if !ok {
+	j, err := loadJob(&s.jobs, req.GetJobId())
+	if err != nil {
+		return status.Errorf(codes.Internal, "error retrieving job: %v", err)
+	}
+	if j == nil {
 		return status.Error(codes.NotFound, "job not found")
 	}
 	reader := j.NewOutputReader()
@@ -246,8 +215,11 @@ func (s *server) StopJob(
 	ctx context.Context,
 	req *pb.StopJobRequest,
 ) (*pb.StopJobResponse, error) {
-	j, ok := s.jobs.Load(req.GetJobId())
-	if !ok {
+	j, err := loadJob(&s.jobs, req.GetJobId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error retrieving job: %v", err)
+	}
+	if j == nil {
 		return nil, status.Error(codes.NotFound, "job not found")
 	}
 	if err := j.Stop(); err != nil {
@@ -262,8 +234,11 @@ func (s *server) GetJobStatus(
 	_ context.Context,
 	req *pb.GetJobStatusRequest,
 ) (*pb.GetJobStatusResponse, error) {
-	j, ok := s.jobs.Load(req.GetJobId())
-	if !ok {
+	j, err := loadJob(&s.jobs, req.GetJobId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error retrieving job: %v", err)
+	}
+	if j == nil {
 		return nil, status.Error(codes.NotFound, "job not found")
 	}
 
