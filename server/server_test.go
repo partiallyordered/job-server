@@ -189,22 +189,26 @@ func TestResolveAllowed(t *testing.T) {
 
 	t.Run("resolves bare name", func(t *testing.T) {
 		withAllowlist(t, map[string][]string{testIdentity: {truePath}})
-		assert.NoError(t, resolveAllowed(testIdentity, "true"))
+		_, err := resolveAllowed(testIdentity, "true")
+		assert.NoError(t, err)
 	})
 
 	t.Run("allows absolute path", func(t *testing.T) {
 		withAllowlist(t, map[string][]string{testIdentity: {truePath}})
-		assert.NoError(t, resolveAllowed(testIdentity, truePath))
+		_, err := resolveAllowed(testIdentity, truePath)
+		assert.NoError(t, err)
 	})
 
 	t.Run("rejects unallowed executable", func(t *testing.T) {
 		withAllowlist(t, map[string][]string{testIdentity: {truePath}})
-		assert.ErrorContains(t, resolveAllowed(testIdentity, "bash"), "not permitted")
+		_, err := resolveAllowed(testIdentity, "bash")
+		assert.ErrorContains(t, err, "not permitted")
 	})
 
 	t.Run("rejects nonexistent executable", func(t *testing.T) {
 		withAllowlist(t, map[string][]string{testIdentity: {}})
-		assert.ErrorContains(t, resolveAllowed(testIdentity, "this-does-not-exist"), "not found")
+		_, err := resolveAllowed(testIdentity, "this-does-not-exist")
+		assert.ErrorContains(t, err, "not found")
 	})
 }
 

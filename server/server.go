@@ -77,20 +77,22 @@ func resolveSAN(ctx context.Context) (string, error) {
 // resolveAllowed takes an identity and executable name and determines whether the identity is
 // allowed to execute the executable. The identity is normally found with resolveSAN. The
 // executable can be an absolute or relative path, and will be resolved with [exec.LookPath] in any
-// case.
-func resolveAllowed(identity string, executable string) error {
+// case. If the identity is permitted to execute the executable, the absolute path of the
+// executable will be returned. This means the caller can avoid resolving the path a second time
+// with a potentially different result (e.g. if PATH has changed between the two invocations).
+func resolveAllowed(identity string, executable string) (string, error) {
 	allowed, ok := clientAllowlist[identity]
 	if !ok {
-		return status.Errorf(codes.PermissionDenied, "client %q not present in system", identity)
+		return "", status.Errorf(codes.PermissionDenied, "client %q not present in system", identity)
 	}
 	resolvedPath, err := exec.LookPath(executable)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "executable %q not found: %v", executable, err)
+		return "", status.Errorf(codes.InvalidArgument, "executable %q not found: %v", executable, err)
 	}
 	if slices.Contains(allowed, resolvedPath) {
-		return nil
+		return resolvedPath, nil
 	}
-	return status.Errorf(
+	return "", status.Errorf(
 		codes.PermissionDenied,
 		"executable %q not permitted for client %q",
 		executable,
@@ -100,11 +102,14 @@ func resolveAllowed(identity string, executable string) error {
 
 // authorizeExecutable authorizes or refuses a request to start a job with a given executable based
 // on the subject alternative name provided by the peer. The peer should be found in the context
-// supplied to authorizeExecutable.
-func authorizeExecutable(ctx context.Context, executable string) error {
+// supplied to authorizeExecutable. If the peer is permitted to execute the executable, the absolute
+// path of the executable will be returned. This means the caller can avoid resolving the path a
+// second time with a potentially different result (e.g. if PATH has changed between the two
+// invocations).
+func authorizeExecutable(ctx context.Context, executable string) (string, error) {
 	identity, err := resolveSAN(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	return resolveAllowed(identity, executable)
 }
@@ -146,7 +151,8 @@ func (s *server) CreateJob(
 		// confusing in some contexts.
 		return nil, status.Error(codes.InvalidArgument, "job ID must have non-zero length")
 	}
-	if err := authorizeExecutable(ctx, req.GetExecutable()); err != nil {
+	execPathAbs, err := authorizeExecutable(ctx, req.GetExecutable())
+	if err != nil {
 		return nil, err
 	}
 
@@ -155,7 +161,7 @@ func (s *server) CreateJob(
 	if alreadyPresent {
 		return nil, status.Error(codes.AlreadyExists, "job ID already exists")
 	}
-	job, err := job.Create(req.GetExecutable(), req.GetArgs()...)
+	job, err := job.Create(execPathAbs, req.GetArgs()...)
 	if err != nil {
 		// Release the reserved job ID in case of failure to create the job
 		s.jobs.Delete(jobID)
