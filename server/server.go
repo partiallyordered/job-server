@@ -221,7 +221,7 @@ func (s *server) StopJob(
 	if j == nil {
 		return nil, status.Error(codes.NotFound, "job not found")
 	}
-	if err := j.Stop(); err != nil {
+	if err := j.Stop(); err != nil && !errors.Is(err, job.ErrAttemptToStopStoppedJob) {
 		return nil, status.Errorf(codes.Internal, "stopping job: %v", err)
 	}
 
