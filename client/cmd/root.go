@@ -8,11 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "job",
-	Short: "job connects to a job server to manage jobs on the server machine",
-	Long: `Examples:
+func Execute(client pb.JobServiceClient) {
+	// rootCmd represents the base command when called without any subcommands
+	rootCmd := &cobra.Command{
+		Use:   "job",
+		Short: "job connects to a job server to manage jobs on the server machine",
+		Long: `Examples:
 
 Start a ping job:
 job start ping -- ping 127.0.0.1
@@ -29,9 +30,8 @@ Logs will be streamed from the beginning of output.
 Stop the job:
 job stop ping
 A stop request will send a SIGKILL to the process represented by the job.`,
-}
+	}
 
-func Execute(client pb.JobServiceClient) {
 	rootCmd.AddCommand(startCmd(client), statusCmd(client), stopCmd(client), streamCmd(client))
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
