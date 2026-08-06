@@ -1,6 +1,6 @@
-# int-backend-matt-1
+# job-server
 
-This repo implements the job server specified in [design.md](design.md).
+This repo implements the job server specified in [design.md](design.md) as development practice. It is "hand-written" because, at the time of implementation I had hardly written Go for a year.
 
 ### Run
 
