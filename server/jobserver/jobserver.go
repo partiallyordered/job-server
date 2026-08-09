@@ -204,6 +204,10 @@ func (s *JobServer) StreamJobLog(
 				if err := reader.Close(); err != nil {
 					log.Printf("unexpected/unhandled error closing reader: %v", err)
 				}
+				if srv.Context().Err() != nil || errors.Is(err, io.EOF) {
+					// The client disconnected or canceled the stream.
+					return nil
+				}
 				return status.Errorf(codes.Internal, "grpc stream terminated unexpectedly: %v", err)
 			}
 		}
